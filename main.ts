@@ -1,5 +1,4 @@
 import { App, Plugin, WorkspaceLeaf, ItemView, TFile, Setting, PluginSettingTab } from "obsidian";
-import obsidian from "obsidian";
 
 const VIEW_TYPE_SIMILAR = "similar-notes-view";
 

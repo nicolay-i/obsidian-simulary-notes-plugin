@@ -1,7 +1,7 @@
 {
     "id": "similar-notes",
     "name": "Similar notes",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "description": "Find similar notes in your Obsidian vault",
     "main": "main.js",
     "author": "Nicolay I",
