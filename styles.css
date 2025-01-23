@@ -1,8 +1,100 @@
-/*
+.similar-notes-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 0;
+    background-color: var(--background-secondary);
+}
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+[data-type="similar-notes-view"] {
+    padding-top: 10px;
+}
 
-If your plugin does not need CSS, delete this file.
+[data-type="similar-notes-view"] h4 {
+    padding: 0 15px 8px;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-normal);
+    border-bottom: 1px solid var(--background-modifier-border);
+}
 
-*/
+.similar-notes-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.similar-notes-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100px;
+    color: var(--text-muted);
+    font-size: 0.9em;
+}
+
+.similar-notes-loading::after {
+    content: "";
+    width: 4px;
+    height: 4px;
+    margin-left: 8px;
+    border-radius: 50%;
+    background-color: var(--text-muted);
+    animation: loading-dots 1.4s infinite;
+}
+
+@keyframes loading-dots {
+    0%, 20% {
+        opacity: 0;
+    }
+    50% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+    }
+}
+
+.similar-notes-empty,
+.similar-notes-error {
+    padding: 16px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.9em;
+}
+
+.similar-notes-error {
+    color: var(--text-error);
+}
+
+.similar-note-row {
+    padding: 6px 8px;
+    margin-bottom: 2px;
+    border-radius: 4px;
+    transition: background-color 0.15s ease;
+}
+
+.similar-note-row:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.similar-note-link {
+    display: block;
+    color: var(--text-normal);
+    text-decoration: none;
+    margin-bottom: 2px;
+    font-size: 0.9em;
+    line-height: 1.3;
+    cursor: pointer;
+}
+
+.similar-note-link:hover {
+    color: var(--text-accent);
+    text-decoration: underline;
+}
+
+.similar-note-similarity {
+    color: var(--text-muted);
+    font-size: 0.8em;
+} 

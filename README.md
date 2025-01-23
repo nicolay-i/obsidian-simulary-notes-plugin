@@ -1,94 +1,52 @@
-# Obsidian Sample Plugin
+# Similar Notes Search Plugin for Obsidian
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+Implements a right panel with a list of similar notes. Clicking on a note opens it for viewing.
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+## Plugin Settings
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open Sample Modal" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
+- Excluded Folders - comma-separated folders that will be ignored during search
+- Minimum Note Length - minimum number of characters in a note to be considered in the search
 
-## First time developing plugins?
+## Development
 
-Quick starting guide for new plugin devs:
+- `npm install` - install dependencies
+- `npm run dev` - build the plugin. The command builds the main.js file and copies it to the plugin root
+- `npm run build` - build the plugin. The command builds the main.js file and copies it to the plugin root
+- `npm run version` - bump the version of the plugin
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+## What is it?
 
-## Releasing new releases
+### Background
 
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
+Obsidian has well-developed functionality for linking notes: backlinks, adding links to note properties, mentions, graph view, etc.
 
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
+However, it's difficult to find connections between notes that would be useful for organizing your digital garden.
 
-## Adding your plugin to the community plugin list
+The most accessible solution is searching by note title and aliases.
 
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
+But often, what we remember while reading the current note's text isn't so consonant that we can recall there was another note on this topic. Or that it somehow intersects with this note. This becomes especially noticeable when the number of notes becomes quite large.
 
-## How to use
+### Research
 
-- Clone this repo.
-- Make sure your NodeJS is at least v16 (`node --version`).
-- `npm i` or `yarn` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
+In theory, you could use the graph view to solve this issue. But personally, I find this inconvenient in the context of searching for notes that could be linked to the current note.
 
-## Manually installing the plugin
+Also, in theory, this could be solved through LLM - for example, Obsidian Copilot is supposed to do this.
+Setting aside the plugin's functionality, it's difficult to trust an external service with such a personal matter and allow a third-party service to read the text of all notes.
 
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
+There are also algorithms for finding similar notes that could be used. But I couldn't find plugins that would implement this functionality while being convenient, accessible, and functional - all at the same time.
 
-## Improve code quality with eslint (optional)
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
-- To use eslint with this project, make sure to install eslint from terminal:
-  - `npm install -g eslint`
-- To use eslint to analyze this project use this command:
-  - `eslint main.ts`
-  - eslint will then create a report with suggestions for code improvement by file and line number.
-- If your source code is in a folder, such as `src`, you can use eslint with this command to analyze all files in that folder:
-  - `eslint .\src\`
+For example, the Word2Vec algorithm, which I've been interested in for quite a long time. But unfortunately, its implementation is still overly complex for me. Maybe later...
 
-## Funding URL
+However, besides this algorithm, there are relatively simple options. For example, the TF-IDF algorithm, which was implemented in this plugin.
 
-You can include funding URLs where people who use your plugin can financially support it.
+### Algorithm Description
 
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
+Overall, the TF-IDF algorithm is quite simple.
+It's based on counting term frequency in a note and in the collection of notes.
+That is, it calculates the term frequency in a note, then calculates the term frequency in the collection of notes, and then calculates the ratio of term frequency in the note to term frequency in the collection of notes.
 
-```json
-{
-    "fundingUrl": "https://buymeacoffee.com"
-}
-```
+Thus, we get a vector that describes the note. And we can compare it with another note's vector to understand how similar they are.
 
-If you have multiple URLs, you can also do:
+A notable drawback is that it doesn't consider the meaning of terms, only their frequency. And note size has a very large impact - the smaller it is, the less significant its content becomes.
 
-```json
-{
-    "fundingUrl": {
-        "Buy Me a Coffee": "https://buymeacoffee.com",
-        "GitHub Sponsor": "https://github.com/sponsors",
-        "Patreon": "https://www.patreon.com/"
-    }
-}
-```
-
-## API Documentation
-
-See https://github.com/obsidianmd/obsidian-api
+More details are described in the [Algorithm.md](Algorithm.md) file 
