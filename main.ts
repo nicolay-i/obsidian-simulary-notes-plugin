@@ -142,12 +142,12 @@ function cosineSimilarity(vecA: any, vecB: any) {
 }
 
 class SimilarNotesView extends ItemView {
-    plugin: MyPlugin;
+    plugin: SimularNotesPlugin;
     contentEl!: HTMLElement;
     container: HTMLDivElement;
     loadingEl!: HTMLElement;
 
-    constructor(leaf: WorkspaceLeaf, plugin: MyPlugin) {
+    constructor(leaf: WorkspaceLeaf, plugin: SimularNotesPlugin) {
         super(leaf);
         this.plugin = plugin;
         this.container = this.containerEl.createDiv({
@@ -230,7 +230,7 @@ class SimilarNotesView extends ItemView {
     }
 }
 
-export default class MyPlugin extends Plugin {
+export default class SimularNotesPlugin extends Plugin {
     view!: SimilarNotesView;
     settings!: PluginSettings;
 
@@ -406,9 +406,9 @@ export default class MyPlugin extends Plugin {
 }
 
 class SimilarNotesSettingTab extends PluginSettingTab {
-    plugin: MyPlugin;
+    plugin: SimularNotesPlugin;
 
-    constructor(app: App, plugin: MyPlugin) {
+    constructor(app: App, plugin: SimularNotesPlugin) {
         super(app, plugin);
         this.plugin = plugin;
     }
