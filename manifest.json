@@ -1,11 +1,11 @@
 {
-    "id": "similar-notes",
-    "name": "Similar notes",
-    "version": "1.0.3",
-    "description": "Find similar notes in your Obsidian vault",
-    "main": "main.js",
-    "author": "Nicolay I",
-    "isDesktopOnly": false,
-    "minAppVersion": "0.15.0",
-    "authorUrl": "https://github.com/nicolay-i"
+	"id": "similar-notes",
+	"name": "Similar notes",
+	"version": "1.0.4",
+	"description": "Find similar notes in your Obsidian vault",
+	"main": "main.js",
+	"author": "Nicolay I",
+	"isDesktopOnly": false,
+	"minAppVersion": "0.15.0",
+	"authorUrl": "https://github.com/nicolay-i"
 }
