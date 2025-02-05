@@ -2,6 +2,13 @@ import { App, Plugin, WorkspaceLeaf, ItemView, TFile, Setting, PluginSettingTab 
 
 const VIEW_TYPE_SIMILAR = "similar-notes-view";
 
+interface WordFrequency {
+    word: string;
+    count: number;
+    frequency: number;
+    isIgnored: boolean;
+}
+
 interface Localization {
     viewTitle: string;
     settingsTitle: string;
@@ -17,6 +24,13 @@ interface Localization {
     pluginLoaded: string;
     pluginUnloaded: string;
     simularyText: string;
+    wordFrequencyTitle: string;
+    skipWord: string;
+    useWord: string;
+    frequencyText: string;
+    noWords: string;
+    ignoredWordsName: string;
+    ignoredWordsDesc: string;
 }
 
 const locales: { [key: string]: Localization } = {
@@ -35,6 +49,13 @@ const locales: { [key: string]: Localization } = {
         pluginLoaded: "Plugin loaded!",
         pluginUnloaded: "Plugin unloaded!",
         simularyText: "Similarity: {{value}}%",
+        wordFrequencyTitle: "Word Frequency",
+        skipWord: "Skip",
+        useWord: "Use",
+        frequencyText: "Frequency: {{value}}",
+        noWords: "No words found",
+        ignoredWordsName: "Ignored Words",
+        ignoredWordsDesc: "List of words to exclude from frequency analysis (comma-separated)"
     },
     de: {
         viewTitle: "Ähnliche Notizen",
@@ -51,6 +72,13 @@ const locales: { [key: string]: Localization } = {
         pluginLoaded: "Plugin geladen!",
         pluginUnloaded: "Plugin entladen!",
         simularyText: "Ähnlichkeit: {{value}}%",
+        wordFrequencyTitle: "Worthäufigkeit",
+        skipWord: "Überspringen",
+        useWord: "Verwenden",
+        frequencyText: "Häufigkeit: {{value}}",
+        noWords: "Keine Wörter gefunden",
+        ignoredWordsName: "Ignorierte Wörter",
+        ignoredWordsDesc: "Liste der Wörter, die von der Häufigkeitsanalyse ausgeschlossen werden sollen (durch Komma getrennt)"
     },
     fr: {
         viewTitle: "Notes similaires",
@@ -67,6 +95,13 @@ const locales: { [key: string]: Localization } = {
         pluginLoaded: "Plugin chargé !",
         pluginUnloaded: "Plugin déchargé !",
         simularyText: "Similarité: {{value}}%",
+        wordFrequencyTitle: "Fréquence des mots",
+        skipWord: "Ignorer",
+        useWord: "Utiliser",
+        frequencyText: "Fréquence: {{value}}",
+        noWords: "Aucun mot trouvé",
+        ignoredWordsName: "Mots ignorés",
+        ignoredWordsDesc: "Liste des mots à exclure de l'analyse de fréquence (séparés par des virgules)"
     },
     ru: {
         viewTitle: "Похожие заметки",
@@ -83,17 +118,26 @@ const locales: { [key: string]: Localization } = {
         pluginLoaded: "Плагин загружен!",
         pluginUnloaded: "Плагин выгружен!",
         simularyText: "Схожесть: {{value}}%",
+        wordFrequencyTitle: "Частотность слов",
+        skipWord: "Пропускать",
+        useWord: "Использовать",
+        frequencyText: "Частота: {{value}}",
+        noWords: "Слов не найдено",
+        ignoredWordsName: "Игнорируемые слова",
+        ignoredWordsDesc: "Список слов для исключения из частотности (через запятую)"
     },
 };
 
 interface PluginSettings {
     excludedFolders: string[];
     minNoteLength: number;
+    ignoredWords: string[];
 }
 
 const DEFAULT_SETTINGS: PluginSettings = {
     excludedFolders: ['Files'],
-    minNoteLength: 10
+    minNoteLength: 10,
+    ignoredWords: []
 };
 
 function calculateTF(documents: string[]) {
@@ -146,6 +190,11 @@ class SimilarNotesView extends ItemView {
     contentEl!: HTMLElement;
     container: HTMLDivElement;
     loadingEl!: HTMLElement;
+    tabsContainer!: HTMLElement;
+    similarContent!: HTMLElement;
+    wordFrequencyContent!: HTMLElement;
+    activeTab: 'similar' | 'frequency' = 'similar';
+    wordFrequencies: WordFrequency[] = [];
 
     constructor(leaf: WorkspaceLeaf, plugin: SimularNotesPlugin) {
         super(leaf);
@@ -167,9 +216,31 @@ class SimilarNotesView extends ItemView {
         const { containerEl } = this;
         containerEl.empty();
         
-        containerEl.createEl("h4", { text: this.plugin.getLocale().viewTitle });
-        this.contentEl = containerEl.createDiv({
-            cls: "similar-notes-content"
+        // Create a container for tabs
+        this.tabsContainer = containerEl.createDiv({ cls: "similar-notes-tabs" });
+        
+        // Create tabs
+        const similarTab = this.tabsContainer.createDiv({
+            cls: `similar-notes-tab ${this.activeTab === 'similar' ? 'active' : ''}`,
+            text: this.plugin.getLocale().viewTitle
+        });
+        
+        const frequencyTab = this.tabsContainer.createDiv({
+            cls: `similar-notes-tab ${this.activeTab === 'frequency' ? 'active' : ''}`,
+            text: this.plugin.getLocale().wordFrequencyTitle
+        });
+
+        // Add click handlers
+        similarTab.addEventListener('click', () => this.switchTab('similar'));
+        frequencyTab.addEventListener('click', () => this.switchTab('frequency'));
+
+        // Create containers for content
+        this.similarContent = containerEl.createDiv({
+            cls: `similar-notes-content ${this.activeTab === 'similar' ? 'active' : ''}`
+        });
+
+        this.wordFrequencyContent = containerEl.createDiv({
+            cls: `word-frequency-content ${this.activeTab === 'frequency' ? 'active' : ''}`
         });
 
         this.loadingEl = containerEl.createDiv({
@@ -177,6 +248,44 @@ class SimilarNotesView extends ItemView {
             text: this.plugin.getLocale().searchingNotes
         });
         this.loadingEl.hide();
+
+        // Initialize content for both tabs
+        if (this.activeTab === 'similar') {
+            const currentFile = this.plugin.app.workspace.getActiveFile();
+            if (currentFile) {
+                const content = await this.plugin.app.vault.read(currentFile);
+                await this.plugin.findNotes(content);
+            }
+        } else {
+            await this.updateWordFrequencies();
+        }
+    }
+
+    switchTab(tab: 'similar' | 'frequency') {
+        this.activeTab = tab;
+        
+        // Update tab classes
+        const tabs = this.tabsContainer.querySelectorAll('.similar-notes-tab');
+        tabs.forEach((t: HTMLElement) => {
+            t.classList.toggle('active', 
+                t.textContent === (tab === 'similar' ? this.plugin.getLocale().viewTitle : this.plugin.getLocale().wordFrequencyTitle)
+            );
+        });
+
+        // Show the appropriate content
+        this.similarContent.classList.toggle('active', tab === 'similar');
+        this.wordFrequencyContent.classList.toggle('active', tab === 'frequency');
+
+        // Update content of the active tab
+        if (tab === 'similar') {
+            this.plugin.getCurrentFileContent().then(content => {
+                if (content) {
+                    this.plugin.findNotes(content);
+                }
+            });
+        } else {
+            this.updateWordFrequencies();
+        }
     }
 
     async onClose() {
@@ -185,21 +294,29 @@ class SimilarNotesView extends ItemView {
 
     showLoading() {
         this.loadingEl.show();
-        this.contentEl.hide();
+        if (this.activeTab === 'similar') {
+            this.similarContent.hide();
+        } else {
+            this.wordFrequencyContent.hide();
+        }
     }
 
     hideLoading() {
         this.loadingEl.hide();
-        this.contentEl.show();
+        if (this.activeTab === 'similar') {
+            this.similarContent.show();
+        } else {
+            this.wordFrequencyContent.show();
+        }
     }
 
     async updateView(similarities: Array<{document: string, similarity: number}>) {
-        if (!this.contentEl) return;
+        if (!this.similarContent) return;
         
-        this.contentEl.empty();
+        this.similarContent.empty();
         
         if (similarities.length === 0) {
-            this.contentEl.createEl("div", {
+            this.similarContent.createEl("div", {
                 cls: "similar-notes-empty",
                 text: this.plugin.getLocale().noSimilarNotes
             });
@@ -207,7 +324,7 @@ class SimilarNotesView extends ItemView {
         }
         
         for (const item of similarities.slice(0, 20)) {
-            const row = this.contentEl.createEl("div", { cls: "similar-note-row" });
+            const row = this.similarContent.createEl("div", { cls: "similar-note-row" });
             
             const link = row.createEl("a", {
                 text: item.document,
@@ -228,6 +345,106 @@ class SimilarNotesView extends ItemView {
             });
         }
     }
+
+    async updateWordFrequencies() {
+        this.showLoading();
+        
+        try {
+            const notes = this.plugin.app.vault.getFiles();
+            const filteredNotes = notes.filter((e) => 
+                e.name.endsWith(".md") && 
+                !this.plugin.settings.excludedFolders.some(folder => e.path.startsWith(folder))
+            );
+
+            const wordCounts: { [key: string]: number } = {};
+            let totalWords = 0;
+
+            for (const note of filteredNotes) {
+                const content = await this.plugin.app.vault.read(note);
+                const words = content.split(/\W+/)
+                    .filter(word => word.length > 0);
+                
+                for (const word of words) {
+                    const wordLower = word.toLowerCase();
+                    wordCounts[wordLower] = (wordCounts[wordLower] || 0) + 1;
+                    totalWords++;
+                }
+            }
+
+            this.wordFrequencies = Object.entries(wordCounts)
+                .map(([word, count]) => ({
+                    word,
+                    count,
+                    frequency: count / totalWords,
+                    isIgnored: this.plugin.settings.ignoredWords.includes(word)
+                }))
+                .sort((a, b) => b.count - a.count);
+
+            this.updateWordFrequencyView();
+        } catch (error) {
+            console.error("Error updating word frequencies:", error);
+            this.wordFrequencyContent.empty();
+            this.wordFrequencyContent.createEl("div", {
+                cls: "word-frequency-error",
+                text: this.plugin.getLocale().errorSearching
+            });
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    updateWordFrequencyView() {
+        this.wordFrequencyContent.empty();
+
+        if (this.wordFrequencies.length === 0) {
+            this.wordFrequencyContent.createEl("div", {
+                cls: "word-frequency-empty",
+                text: this.plugin.getLocale().noWords
+            });
+            return;
+        }
+
+        const list = this.wordFrequencyContent.createEl("div", { cls: "word-frequency-list" });
+
+        // Sort by frequency, ignored words remain in the list
+        const sortedFrequencies = [...this.wordFrequencies].sort((a, b) => b.frequency - a.frequency);
+
+        for (const item of sortedFrequencies) {
+            const row = list.createEl("div", { 
+                cls: `word-frequency-row ${item.isIgnored ? 'ignored' : ''}`
+            });
+            
+            row.createEl("span", {
+                text: item.word,
+                cls: "word-frequency-word"
+            });
+
+            row.createEl("span", {
+                text: this.plugin.getLocale().frequencyText.replace("{{value}}", (item.frequency * 100).toFixed(4) + "%"),
+                cls: "word-frequency-count"
+            });
+
+            const button = row.createEl("button", {
+                text: item.isIgnored ? this.plugin.getLocale().useWord : this.plugin.getLocale().skipWord,
+                cls: `word-frequency-button ${item.isIgnored ? "ignored" : ""}`
+            });
+
+            button.addEventListener("click", async () => {
+                if (item.isIgnored) {
+                    this.plugin.settings.ignoredWords = this.plugin.settings.ignoredWords.filter(w => w !== item.word);
+                } else {
+                    this.plugin.settings.ignoredWords.push(item.word);
+                }
+                await this.plugin.saveSettings();
+                item.isIgnored = !item.isIgnored;
+                
+                // Update only the button and row status
+                button.textContent = item.isIgnored ? this.plugin.getLocale().useWord : this.plugin.getLocale().skipWord;
+                button.classList.toggle("ignored", item.isIgnored);
+                row.classList.toggle("ignored", item.isIgnored);
+            });
+        }
+    }
 }
 
 export default class SimularNotesPlugin extends Plugin {
@@ -236,9 +453,7 @@ export default class SimularNotesPlugin extends Plugin {
 
     getLocale(): Localization {
         const lang = window.localStorage.getItem('language') || "en";
-
         const baseLang = lang.split('-')[0].toLowerCase();
-        
         return locales[baseLang] || locales.en;
     }
 
@@ -259,6 +474,9 @@ export default class SimularNotesPlugin extends Plugin {
                 if (file && this.view) {
                     const content = await this.app.vault.read(file);
                     await this.findNotes(content);
+                    if (this.view.activeTab === 'frequency') {
+                        await this.view.updateWordFrequencies();
+                    }
                 }
             })
         );
@@ -279,36 +497,28 @@ export default class SimularNotesPlugin extends Plugin {
             if (currentFile) {
                 const content = await this.app.vault.read(currentFile);
                 await this.findNotes(content);
+                if (this.view.activeTab === 'frequency') {
+                    await this.view.updateWordFrequencies();
+                }
             }
         });
-
-        const currentFile = this.app.workspace.getActiveFile();
-        if (currentFile) {
-            const content = await this.app.vault.read(currentFile);
-            await this.activateView();
-            await this.findNotes(content);
-        }
     }
 
     async activateView() {
         try {
             const { workspace } = this.app;
+            const rightSidebar = workspace.rightSplit;
             
+            if (rightSidebar && rightSidebar.collapsed) {
+                rightSidebar.expand();
+            }
+
             let leaf = workspace.getLeavesOfType(VIEW_TYPE_SIMILAR)[0];
-
             if (!leaf) {
-                const rightSidebar = workspace.rightSplit;
-                
-                if (rightSidebar && rightSidebar.collapsed) {
-                    rightSidebar.expand();
-                }
-
                 const newLeaf = workspace.getRightLeaf(false);
-                
                 if (!newLeaf) {
                     throw new Error(this.getLocale().errorCreatingPanel);
                 }
-
                 leaf = newLeaf;
                 await leaf.setViewState({
                     type: VIEW_TYPE_SIMILAR,
@@ -339,37 +549,37 @@ export default class SimularNotesPlugin extends Plugin {
         this.view.showLoading();
         
         try {
-            const notes = this.app.vault.getFiles();
+        const notes = this.app.vault.getFiles();
             const filteredNotes = notes.filter((e) => 
                 e.name.endsWith(".md") && 
                 !this.settings.excludedFolders.some(folder => e.path.startsWith(folder))
             );
 
-            const texts: string[] = [content];
+        const texts: string[] = [content];
 
-            for (const note of filteredNotes) {
-                const file = this.app.vault.getFileByPath(note.path);
-                if (!file) {
-                    continue;
-                }
-                const noteContent = await this.app.vault.read(file);
+        for (const note of filteredNotes) {
+            const file = this.app.vault.getFileByPath(note.path);
+            if (!file) {
+                continue;
+            }
+            const noteContent = await this.app.vault.read(file);
 
                 if (noteContent.length >= this.settings.minNoteLength) {
-                    texts.push(`${note.path}\n${noteContent}`);
-                }
+                texts.push(`${note.path}\n${noteContent}`);
             }
+        }
 
-            const documents = texts;
+        const documents = texts;
 
-            const tf = calculateTF(documents);
-            const idf = calculateIDF(tf, documents.length);
-            const tfidfDocs = documents.map(doc => calculateTFIDF(calculateTF([doc]), idf));
-            const targetTFIDF = calculateTFIDF(calculateTF([content]), idf);
-            
-            const similarities = tfidfDocs.map((tfidfDoc, index) => ({
-                document: filteredNotes[index]?.path ?? index,
-                similarity: cosineSimilarity(tfidfDoc, targetTFIDF)
-            }));
+        const tf = calculateTF(documents);
+        const idf = calculateIDF(tf, documents.length);
+        const tfidfDocs = documents.map(doc => calculateTFIDF(calculateTF([doc]), idf));
+        const targetTFIDF = calculateTFIDF(calculateTF([content]), idf);
+        
+        const similarities = tfidfDocs.map((tfidfDoc, index) => ({
+            document: filteredNotes[index]?.path ?? index,
+            similarity: cosineSimilarity(tfidfDoc, targetTFIDF)
+        }));
 
             const sortedSimilarities = similarities
                 .filter((e) => e.similarity < 1)
@@ -377,7 +587,7 @@ export default class SimularNotesPlugin extends Plugin {
 
             this.view.updateView(sortedSimilarities);
         } catch (error) {
-            console.error("Ошибка при поиске похожих заметок:", error);
+            console.error("Error searching for similar notes:", error);
             this.view.contentEl.empty();
             this.view.contentEl.createEl("div", {
                 cls: "similar-notes-error",
@@ -446,6 +656,27 @@ class SimilarNotesSettingTab extends PluginSettingTab {
                     if (!isNaN(numValue) && numValue > 0) {
                         this.plugin.settings.minNoteLength = numValue;
                         await this.plugin.saveSettings();
+                    }
+                }));
+
+        // New field for ignored words
+        new Setting(containerEl)
+            .setName(locale.ignoredWordsName)
+            .setDesc(locale.ignoredWordsDesc)
+            .addTextArea(text => text
+                .setPlaceholder("the, a, an, in, on, at")
+                .setValue(this.plugin.settings.ignoredWords.join(', '))
+                .onChange(async (value) => {
+                    this.plugin.settings.ignoredWords = value
+                        .split(',')
+                        .map(word => word.trim().toLowerCase())
+                        .filter(word => word.length > 0);
+                    await this.plugin.saveSettings();
+                    
+                    // Update frequency, if the corresponding tab is open
+                    const view = this.plugin.view;
+                    if (view && view.activeTab === 'frequency') {
+                        await view.updateWordFrequencies();
                     }
                 }));
     }
