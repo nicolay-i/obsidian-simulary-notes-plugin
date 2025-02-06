@@ -182,6 +182,11 @@ function cosineSimilarity(vecA: any, vecB: any) {
     const dotProduct = Object.keys(vecA).reduce((sum: number, key: string) => sum + (vecA[key] || 0) * (vecB[key] || 0), 0);
     const magnitudeA = Math.sqrt(Object.keys(vecA).reduce((sum, key) => sum + (vecA[key] || 0) ** 2, 0));
     const magnitudeB = Math.sqrt(Object.keys(vecB).reduce((sum, key) => sum + (vecB[key] || 0) ** 2, 0));
+    
+    if (magnitudeA === 0 || magnitudeB === 0) {
+        return 0; // if one of the vectors has a zero length, the similarity is 0
+    }
+    
     return dotProduct / (magnitudeA * magnitudeB);
 }
 
@@ -549,40 +554,60 @@ export default class SimularNotesPlugin extends Plugin {
         this.view.showLoading();
         
         try {
-        const notes = this.app.vault.getFiles();
+            const notes = this.app.vault.getFiles();
             const filteredNotes = notes.filter((e) => 
                 e.name.endsWith(".md") && 
                 !this.settings.excludedFolders.some(folder => e.path.startsWith(folder))
             );
 
-        const texts: string[] = [content];
+            const currentFile = this.app.workspace.getActiveFile();
+            const currentPath = currentFile?.path || "";
 
-        for (const note of filteredNotes) {
-            const file = this.app.vault.getFileByPath(note.path);
-            if (!file) {
-                continue;
-            }
-            const noteContent = await this.app.vault.read(file);
+            // Collect all note texts
+            const noteContents: { path: string; content: string }[] = [];
+            
+            // Add current note
+            noteContents.push({
+                path: currentPath,
+                content: content
+            });
 
+            // Add other notes
+            for (const note of filteredNotes) {
+                const file = this.app.vault.getFileByPath(note.path);
+                if (!file || note.path === currentPath) continue;
+                
+                const noteContent = await this.app.vault.read(file);
                 if (noteContent.length >= this.settings.minNoteLength) {
-                texts.push(`${note.path}\n${noteContent}`);
+                    noteContents.push({
+                        path: note.path,
+                        content: noteContent
+                    });
+                }
             }
-        }
 
-        const documents = texts;
+            // Calculate TF-IDF for all documents
+            const documents = noteContents.map(n => n.content);
+            const tf = calculateTF(documents);
+            const idf = calculateIDF(tf, documents.length);
+            const tfidfDocs = documents.map(doc => calculateTFIDF(calculateTF([doc]), idf));
 
-        const tf = calculateTF(documents);
-        const idf = calculateIDF(tf, documents.length);
-        const tfidfDocs = documents.map(doc => calculateTFIDF(calculateTF([doc]), idf));
-        const targetTFIDF = calculateTFIDF(calculateTF([content]), idf);
-        
-        const similarities = tfidfDocs.map((tfidfDoc, index) => ({
-            document: filteredNotes[index]?.path ?? index,
-            similarity: cosineSimilarity(tfidfDoc, targetTFIDF)
-        }));
+            // Find current document index
+            const currentIndex = 0; // Since we added the current document first
+
+            // Calculate similarity with all documents
+            const similarities = noteContents.map((note, index) => {
+                if (index === currentIndex) return { document: note.path, similarity: 1 };
+                
+                const similarity = cosineSimilarity(tfidfDocs[currentIndex], tfidfDocs[index]);
+                return {
+                    document: note.path,
+                    similarity: similarity
+                };
+            });
 
             const sortedSimilarities = similarities
-                .filter((e) => e.similarity < 1)
+                .filter(e => e.similarity < 1 && e.similarity > 0)
                 .sort((a, b) => b.similarity - a.similarity);
 
             this.view.updateView(sortedSimilarities);
