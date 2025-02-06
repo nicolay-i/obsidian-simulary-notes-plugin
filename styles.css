@@ -191,6 +191,10 @@
     flex: 1;
     font-size: 0.9em;
     color: var(--text-normal);
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;  
 }
 
 .word-frequency-count {
